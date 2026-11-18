@@ -265,6 +265,13 @@ if (FAAD_BUILD_CLI)
     set_target_properties(faad_cli PROPERTIES OUTPUT_NAME faad)
   endif()
 endif()
+
+option(FAAD_BUILD_TESTS "Build property-based regression tests" OFF)
+if (FAAD_BUILD_TESTS)
+  enable_testing()
+  add_subdirectory(tests)
+endif()
+
 # Installation
 
 if(NOT FAAD_BUNDLED_MODE)
