@@ -60,6 +60,9 @@ void hf_generation(sbr_info *sbr, qmf_t Xlow[MAX_NTSRHFG][64],
                    ,uint8_t ch)
 {
     uint8_t l, i, x;
+#ifndef SBR_LOW_POWER
+    uint8_t k, hi;
+#endif
     ALIGN complex_t alpha_0[64], alpha_1[64];
 #ifdef SBR_LOW_POWER
     ALIGN real_t rxx[64];
@@ -84,6 +87,124 @@ void hf_generation(sbr_info *sbr, qmf_t Xlow[MAX_NTSRHFG][64],
     calc_aliasing_degree(sbr, rxx, deg);
 #endif
 
+#ifndef SBR_LOW_POWER
+    /* actual HF generation */
+    {
+        /* Flat patch map: source band p for every high band k.
+           Replaces the per-subband cumulative patch lookup. */
+        uint8_t map_p[64];
+        /* Bands split into filtered / plain-copy groups so the hot loops
+           below carry no per-subband branch. */
+        uint8_t filt_k[64], copy_k[64];
+        real_t filt_bw[64], filt_bw2[64];
+        uint8_t n_filt = 0, n_copy = 0;
+        /* Prediction coefficients are a pure function of (Xlow, p); cache
+           them so bands shared by several patches are computed only once. */
+        uint64_t coef_valid = 0;
+
+        k = sbr->kx;
+        for (i = 0; i < sbr->noPatches; i++)
+        {
+            uint8_t p = sbr->patchStartSubband[i];
+            for (x = 0; x < sbr->patchNoSubbands[i]; x++, k++)
+                map_p[k] = (uint8_t)(p + x);
+        }
+        hi = k; /* == sbr->kx + sbr->M */
+
+        for (k = sbr->kx; k < hi; k++)
+        {
+            real_t bw = sbr->bwArray[ch][sbr->table_map_k_to_g[k]];
+            real_t bw2 = MUL_C(bw, bw);
+            if (bw2 > 0)
+            {
+                filt_k[n_filt] = k;
+                filt_bw[n_filt] = bw;
+                filt_bw2[n_filt] = bw2;
+                n_filt++;
+            } else {
+                copy_k[n_copy++] = k;
+            }
+        }
+
+        /* filtered bands: patch with prediction filtering */
+        for (x = 0; x < n_filt; x++)
+        {
+            real_t a0_r, a0_i, a1_r, a1_i;
+            real_t temp1_r, temp2_r, temp3_r;
+            real_t temp1_i, temp2_i, temp3_i;
+            const qmf_t *src;
+            qmf_t *dst;
+
+            k = filt_k[x];
+            {
+                const uint8_t p = map_p[k];
+                const real_t bw = filt_bw[x];
+                const real_t bw2 = filt_bw2[x];
+
+                if (!((coef_valid >> p) & 1))
+                {
+                    calc_prediction_coef(sbr, Xlow, alpha_0, alpha_1, p);
+                    coef_valid |= (uint64_t)1 << p;
+                }
+
+                a0_r = MUL_C(RE(alpha_0[p]), bw);
+                a1_r = MUL_C(RE(alpha_1[p]), bw2);
+                a0_i = MUL_C(IM(alpha_0[p]), bw);
+                a1_i = MUL_C(IM(alpha_1[p]), bw2);
+
+                src = &Xlow[first - 2 + offset][p];
+                dst = &Xhigh[first + offset][k];
+            }
+
+            temp2_r = QMF_RE(src[0]);
+            temp3_r = QMF_RE(src[64]);
+            temp2_i = QMF_IM(src[0]);
+            temp3_i = QMF_IM(src[64]);
+            src += 128;
+
+            for (l = first; l < last; l++)
+            {
+                temp1_r = temp2_r;
+                temp2_r = temp3_r;
+                temp3_r = QMF_RE(*src);
+                temp1_i = temp2_i;
+                temp2_i = temp3_i;
+                temp3_i = QMF_IM(*src);
+
+                QMF_RE(*dst) =
+                    temp3_r
+                  +(MUL_R(a0_r, temp2_r) -
+                    MUL_R(a0_i, temp2_i) +
+                    MUL_R(a1_r, temp1_r) -
+                    MUL_R(a1_i, temp1_i));
+                QMF_IM(*dst) =
+                    temp3_i
+                  +(MUL_R(a0_i, temp2_r) +
+                    MUL_R(a0_r, temp2_i) +
+                    MUL_R(a1_i, temp1_r) +
+                    MUL_R(a1_r, temp1_i));
+
+                src += 64;
+                dst += 64;
+            }
+        }
+
+        /* plain-copy bands: batched whole-sample copies, no branching */
+        for (x = 0; x < n_copy; x++)
+        {
+            const qmf_t *src = &Xlow[first + offset][map_p[copy_k[x]]];
+            qmf_t *dst = &Xhigh[first + offset][copy_k[x]];
+
+            for (l = first; l < last; l++)
+            {
+                /* qmf_t covers both the real and imaginary part */
+                memcpy(dst, src, sizeof(qmf_t));
+                src += 64;
+                dst += 64;
+            }
+        }
+    }
+#else
     /* actual HF generation */
     for (i = 0; i < sbr->noPatches; i++)
     {
@@ -178,6 +299,7 @@ void hf_generation(sbr_info *sbr, qmf_t Xlow[MAX_NTSRHFG][64],
             }
         }
     }
+#endif
 
     if (sbr->Reset)
     {
