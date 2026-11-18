@@ -63,6 +63,11 @@ void hf_generation(sbr_info *sbr, qmf_t Xlow[MAX_NTSRHFG][64],
     ALIGN complex_t alpha_0[64], alpha_1[64];
 #ifdef SBR_LOW_POWER
     ALIGN real_t rxx[64];
+#else
+    /* Tracks which low bands already have prediction coefficients, so the
+       expensive covariance solve is not repeated for a reused source band. */
+    uint8_t alpha_valid[64];
+    memset(alpha_valid, 0, sizeof(alpha_valid));
 #endif
 
     uint8_t offset = sbr->tHFAdj;
@@ -85,20 +90,17 @@ void hf_generation(sbr_info *sbr, qmf_t Xlow[MAX_NTSRHFG][64],
 #endif
 
     /* actual HF generation */
+    uint8_t k_base = sbr->kx;
     for (i = 0; i < sbr->noPatches; i++)
     {
         for (x = 0; x < sbr->patchNoSubbands[i]; x++)
         {
             real_t a0_r, a0_i, a1_r, a1_i;
             real_t bw, bw2;
-            uint8_t q, p, k, g;
+            uint8_t p, k, g;
 
             /* find the low and high band for patching */
-            k = sbr->kx + x;
-            for (q = 0; q < i; q++)
-            {
-                k += sbr->patchNoSubbands[q];
-            }
+            k = k_base + x;
             p = sbr->patchStartSubband[i] + x;
 
 #ifdef SBR_LOW_POWER
@@ -120,7 +122,11 @@ void hf_generation(sbr_info *sbr, qmf_t Xlow[MAX_NTSRHFG][64],
                 real_t temp1_r, temp2_r, temp3_r;
 #ifndef SBR_LOW_POWER
                 real_t temp1_i, temp2_i, temp3_i;
-                calc_prediction_coef(sbr, Xlow, alpha_0, alpha_1, p);
+                if (!alpha_valid[p])
+                {
+                    calc_prediction_coef(sbr, Xlow, alpha_0, alpha_1, p);
+                    alpha_valid[p] = 1;
+                }
 #endif
 
                 a0_r = MUL_C(RE(alpha_0[p]), bw);
@@ -177,6 +183,7 @@ void hf_generation(sbr_info *sbr, qmf_t Xlow[MAX_NTSRHFG][64],
                 }
             }
         }
+        k_base += sbr->patchNoSubbands[i];
     }
 
     if (sbr->Reset)

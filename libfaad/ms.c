@@ -52,22 +52,27 @@ void ms_decode(ic_stream *ics, ic_stream *icsr, real_t *l_spec, real_t *r_spec,
         {
             for (b = 0; b < ics->window_group_length[g]; b++)
             {
+                uint16_t group_base = group * nshort;
                 for (sfb = 0; sfb < ics->max_sfb; sfb++)
                 {
+                    uint8_t apply_ms;
+                    uint16_t lo, hi;
                     /* If intensity stereo coding or noise substitution is on
                        for a particular scalefactor band, no M/S stereo decoding
                        is carried out.
                      */
-                    if ((ics->ms_used[g][sfb] || ics->ms_mask_present == 2) &&
-                        !is_intensity(icsr, g, sfb) && !is_noise(ics, g, sfb))
+                    apply_ms = ((ics->ms_used[g][sfb] || ics->ms_mask_present == 2) &&
+                                !is_intensity(icsr, g, sfb) && !is_noise(ics, g, sfb));
+                    if (!apply_ms)
+                        continue;
+                    lo = ics->swb_offset[sfb];
+                    hi = min(ics->swb_offset[sfb+1], ics->swb_offset_max);
+                    for (i = lo; i < hi; i++)
                     {
-                        for (i = ics->swb_offset[sfb]; i < min(ics->swb_offset[sfb+1], ics->swb_offset_max); i++)
-                        {
-                            k = (group*nshort) + i;
-                            tmp = l_spec[k] - r_spec[k];
-                            l_spec[k] = l_spec[k] + r_spec[k];
-                            r_spec[k] = tmp;
-                        }
+                        k = group_base + i;
+                        tmp = l_spec[k] - r_spec[k];
+                        l_spec[k] = l_spec[k] + r_spec[k];
+                        r_spec[k] = tmp;
                     }
                 }
                 group++;

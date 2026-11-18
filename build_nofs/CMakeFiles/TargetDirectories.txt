@@ -1,0 +1,11 @@
+/home/cat/gsb/uid4094/build_nofs/CMakeFiles/faad.dir
+/home/cat/gsb/uid4094/build_nofs/CMakeFiles/faad_drm.dir
+/home/cat/gsb/uid4094/build_nofs/CMakeFiles/faad_fixed.dir
+/home/cat/gsb/uid4094/build_nofs/CMakeFiles/faad_drm_fixed.dir
+/home/cat/gsb/uid4094/build_nofs/CMakeFiles/faad_cli.dir
+/home/cat/gsb/uid4094/build_nofs/CMakeFiles/edit_cache.dir
+/home/cat/gsb/uid4094/build_nofs/CMakeFiles/rebuild_cache.dir
+/home/cat/gsb/uid4094/build_nofs/CMakeFiles/list_install_components.dir
+/home/cat/gsb/uid4094/build_nofs/CMakeFiles/install.dir
+/home/cat/gsb/uid4094/build_nofs/CMakeFiles/install/local.dir
+/home/cat/gsb/uid4094/build_nofs/CMakeFiles/install/strip.dir

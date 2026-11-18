@@ -140,7 +140,14 @@ else()
 endif()
 
 if(CMAKE_C_COMPILER_ID MATCHES "GNU")
-  list(APPEND FAAD_FLAGS -ffloat-store)
+  # -ffloat-store was historically needed on 32-bit x86 to stop the x87 FPU
+  # from keeping 80-bit intermediates in registers. It forces every float
+  # variable back to memory, which on SSE targets (x86-64, ARM with VFP/NEON)
+  # only adds redundant spills and blocks vectorization while producing
+  # bit-identical output. Keep it solely for the legacy 32-bit x86 case.
+  if(CMAKE_SIZEOF_VOID_P EQUAL 4 AND CMAKE_SYSTEM_PROCESSOR MATCHES "i[3-6]86")
+    list(APPEND FAAD_FLAGS -ffloat-store)
+  endif()
 endif()  # GCC
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/include/neaacdec.h
